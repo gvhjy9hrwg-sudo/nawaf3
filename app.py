@@ -93,9 +93,11 @@ def clean_data(df):
     result = pd.concat([clean_rows, dirty_rows], ignore_index=True)
     return result, len(df)-len(df_clean), clean_rows, dirty_rows
 
-def color_rows(df, is_clean):
-    color = 'background-color: #1B5E20; color: white' if is_clean else 'background-color: #B71C1C; color: white'
-    return pd.DataFrame(color, index=df.index, columns=df.columns)
+def color_clean(df):
+    return pd.DataFrame('background-color: #1B5E20; color: white', index=df.index, columns=df.columns)
+
+def color_dirty(df):
+    return pd.DataFrame('background-color: #B71C1C; color: white', index=df.index, columns=df.columns)
 
 init_db()
 
@@ -119,6 +121,7 @@ st.markdown("""
 .progress-box { background: linear-gradient(145deg, #1B5E20, #2E7D32); border-radius: 16px; padding: 25px; text-align: center; border: 1px solid rgba(0,200,83,0.3); margin: 20px 0; }
 .stTabs [data-baseweb="tab"] { background: #1a1f35; border-radius: 10px; color: rgba(255,255,255,0.6); border: 1px solid rgba(255,255,255,0.1); padding: 10px 24px; font-weight: 600; }
 .stTabs [aria-selected="true"] { background: linear-gradient(135deg, #1565C0, #0d47a1) !important; color: white !important; }
+div[data-testid="stFileUploader"] > label { display: none; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -132,7 +135,8 @@ st.markdown("""
 tabs = st.tabs(["🔍  تحليل جديد", "🧹  تنظيف البيانات", "📁  سجل التقارير"])
 
 with tabs[0]:
-    uploaded = st.file_uploader("ارفع ملف البيانات (CSV أو Excel)", type=["csv","xlsx","xls"])
+    st.markdown("### 📂 ارفع ملف البيانات (CSV أو Excel)")
+    uploaded = st.file_uploader(" ", type=["csv","xlsx","xls"], label_visibility="collapsed")
     if uploaded:
         df = pd.read_csv(uploaded) if uploaded.name.endswith('.csv') else pd.read_excel(uploaded)
         st.session_state['df'] = df
@@ -280,9 +284,9 @@ with tabs[1]:
         st.markdown("""<div style="background:#1a1f35;border-radius:12px;padding:20px;border:1px solid rgba(255,255,255,0.08);margin-bottom:20px">
             <p style="color:rgba(255,255,255,0.8);margin:0">
             ✅ حذف الصفوف المكررة<br>
-            🟢 وضع البيانات السليمة في الأعلى بخلفية خضراء<br>
-            🔴 وضع البيانات الناقصة في الأسفل بخلفية حمراء مع ملاحظة توضح وش الناقص<br>
-            📥 تصدير الملف المنظم جاهزاً للتحميل
+            🟢 البيانات السليمة في الأعلى بخلفية خضراء<br>
+            🔴 البيانات الناقصة في الأسفل بخلفية حمراء مع ملاحظة توضح وش الناقص<br>
+            📥 تحميل الملف المنظم مباشرة من الشاشة
             </p></div>""", unsafe_allow_html=True)
 
         if st.button("🧹 نظّف البيانات الآن", use_container_width=True):
@@ -312,25 +316,38 @@ with tabs[1]:
 
             st.markdown('<div class="section-title">📋 معاينة البيانات بعد التنظيف</div>', unsafe_allow_html=True)
 
-            st.markdown("**🟢 البيانات السليمة**")
-            if not clean_rows.empty:
-                st.dataframe(
-                    clean_rows.style.apply(lambda x: color_rows(clean_rows, True), axis=None),
-                    use_container_width=True
-                )
+            # دمج الجدولين في جدول واحد
+            combined = pd.concat([clean_rows, dirty_rows], ignore_index=True)
 
-            if not dirty_rows.empty:
-                st.markdown("**🔴 البيانات الناقصة**")
-                st.dataframe(
-                    dirty_rows.style.apply(lambda x: color_rows(dirty_rows, False), axis=None),
-                    use_container_width=True
-                )
+            def color_combined(df):
+                # كل الخلايا بيضاء افتراضياً
+                styles = pd.DataFrame('', index=df.index, columns=df.columns)
+                for i, row in df.iterrows():
+                    null_cols = [col for col in df.columns if pd.isnull(row[col])]
+                    if null_cols:
+                        # الصف ناقص — لوّن الخلايا الفارغة فقط باللون الأحمر
+                        for col in null_cols:
+                            styles.at[i, col] = 'background-color: #B71C1C; color: white'
+                        # لوّن باقي الخلايا في الصف الناقص بأحمر فاتح
+                        for col in df.columns:
+                            if col not in null_cols and styles.at[i, col] == '':
+                                styles.at[i, col] = 'background-color: #3a0a0a; color: white'
+                    else:
+                        # الصف سليم — أخضر
+                        for col in df.columns:
+                            styles.at[i, col] = 'background-color: #1B5E20; color: white'
+                return styles
+
+            st.dataframe(
+                combined.style.apply(color_combined, axis=None),
+                use_container_width=True
+            )
 
             st.markdown('<div class="section-title">📥 تحميل الملف المنظم</div>', unsafe_allow_html=True)
             csv_buffer = io.StringIO()
             cleaned.to_csv(csv_buffer, index=False, encoding='utf-8-sig')
             st.download_button(
-                label="📥 اضغط هنا لتحميل الملف المنظم (CSV)",
+                label="📥 تحميل الملف المنظم (CSV)",
                 data=csv_buffer.getvalue().encode('utf-8-sig'),
                 file_name=f"cleaned_{st.session_state.get('fname','data.csv')}",
                 mime="text/csv",
