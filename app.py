@@ -320,20 +320,19 @@ with tabs[1]:
             combined = pd.concat([clean_rows, dirty_rows], ignore_index=True)
 
             def color_combined(df):
-                # كل الخلايا بيضاء افتراضياً
                 styles = pd.DataFrame('', index=df.index, columns=df.columns)
+                data_cols = [col for col in df.columns if col != "ملاحظة"]
                 for i, row in df.iterrows():
-                    null_cols = [col for col in df.columns if pd.isnull(row[col])]
+                    null_cols = [col for col in data_cols if pd.isnull(row[col])]
                     if null_cols:
-                        # الصف ناقص — لوّن الخلايا الفارغة فقط باللون الأحمر
-                        for col in null_cols:
-                            styles.at[i, col] = 'background-color: #B71C1C; color: white'
-                        # لوّن باقي الخلايا في الصف الناقص بأحمر فاتح
+                        # صف ناقص — باقي الخلايا حمراء فاتحة والفارغة حمراء داكنة
                         for col in df.columns:
-                            if col not in null_cols and styles.at[i, col] == '':
-                                styles.at[i, col] = 'background-color: #3a0a0a; color: white'
+                            if col in null_cols:
+                                styles.at[i, col] = 'background-color: #B71C1C; color: white'
+                            else:
+                                styles.at[i, col] = 'background-color: #5a1a1a; color: white'
                     else:
-                        # الصف سليم — أخضر
+                        # صف سليم — أخضر
                         for col in df.columns:
                             styles.at[i, col] = 'background-color: #1B5E20; color: white'
                 return styles
